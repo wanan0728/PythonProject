@@ -1,6 +1,6 @@
 """
 智能客服主应用
-添加了用户注册登录功能 + 管理员独立界面
+添加了用户注册登录功能 + 管理员独立界面 + 弹窗提示
 """
 import sys
 import os
@@ -32,16 +32,174 @@ if 'admin_mode' not in st.session_state:
     st.session_state.admin_mode = False
 if 'current_user' not in st.session_state:
     st.session_state.current_user = None
-if 'register_success' not in st.session_state:
-    st.session_state.register_success = False
-if 'register_error' not in st.session_state:
-    st.session_state.register_error = None
+if 'show_success_popup' not in st.session_state:
+    st.session_state.show_success_popup = False
+if 'show_error_popup' not in st.session_state:
+    st.session_state.show_error_popup = False
+if 'popup_message' not in st.session_state:
+    st.session_state.popup_message = ""
+if 'popup_username' not in st.session_state:
+    st.session_state.popup_username = ""
 
 # ========== 管理员账户配置 ==========
 ADMIN_USERS = ["admin", "wanan"]
 
+# ========== 自定义CSS弹窗样式 ==========
+st.markdown("""
+<style>
+.custom-popup {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 400px;
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    z-index: 999999;
+    animation: slideIn 0.3s ease;
+    padding: 30px;
+    text-align: center;
+    border: 1px solid #e0e0e0;
+}
+
+.popup-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 999998;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -60%);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%);
+    }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.popup-success {
+    border-top: 5px solid #28a745;
+}
+
+.popup-error {
+    border-top: 5px solid #dc3545;
+}
+
+.popup-icon {
+    font-size: 60px;
+    margin-bottom: 15px;
+}
+
+.popup-title {
+    font-size: 24px;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.popup-message {
+    font-size: 16px;
+    color: #666;
+    margin-bottom: 20px;
+}
+
+.popup-timer {
+    font-size: 14px;
+    color: #999;
+    margin-top: 15px;
+}
+
+.countdown-circle {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: #f0f0f0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+    font-weight: bold;
+    color: #333;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ========== 显示成功弹窗 ==========
+def show_success_popup(username):
+    placeholder = st.empty()
+    for i in range(3, 0, -1):
+        with placeholder.container():
+            st.markdown(f"""
+            <div class="popup-overlay"></div>
+            <div class="custom-popup popup-success">
+                <div class="popup-icon">✅</div>
+                <div class="popup-title">注册成功！</div>
+                <div class="popup-message">
+                    欢迎 <strong>{username}</strong> 加入智能客服<br>
+                    您的账号已创建成功
+                </div>
+                <div style="margin: 20px 0;">
+                    <div class="countdown-circle">{i}</div>
+                </div>
+                <div class="popup-timer">{i}秒后自动跳转到登录页...</div>
+            </div>
+            """, unsafe_allow_html=True)
+        time.sleep(1)
+    placeholder.empty()
+
+# ========== 显示失败弹窗 ==========
+def show_error_popup(error_msg):
+    placeholder = st.empty()
+    for i in range(3, 0, -1):
+        with placeholder.container():
+            st.markdown(f"""
+            <div class="popup-overlay"></div>
+            <div class="custom-popup popup-error">
+                <div class="popup-icon">❌</div>
+                <div class="popup-title">注册失败</div>
+                <div class="popup-message">
+                    {error_msg}<br>
+                    请检查后重新尝试
+                </div>
+                <div style="margin: 20px 0;">
+                    <div class="countdown-circle">{i}</div>
+                </div>
+                <div class="popup-timer">{i}秒后自动关闭...</div>
+            </div>
+            """, unsafe_allow_html=True)
+        time.sleep(1)
+    placeholder.empty()
+
 # ========== 如果未登录，显示登录/注册界面 ==========
 if not st.session_state.logged_in:
+
+    # 显示成功弹窗
+    if st.session_state.show_success_popup:
+        show_success_popup(st.session_state.popup_username)
+        st.session_state.show_success_popup = False
+        st.session_state.popup_username = ""
+        st.session_state.register_mode = False
+        st.rerun()
+
+    # 显示失败弹窗
+    if st.session_state.show_error_popup:
+        show_error_popup(st.session_state.popup_message)
+        st.session_state.show_error_popup = False
+        st.session_state.popup_message = ""
+        st.rerun()
+
     st.title("🤖 智能客服系统")
     st.markdown("---")
 
@@ -138,31 +296,13 @@ if not st.session_state.logged_in:
                         )
 
                         if success:
-                            st.session_state.register_success = True
-                            st.session_state.register_username = username
+                            st.session_state.show_success_popup = True
+                            st.session_state.popup_username = username
                             st.rerun()
                         else:
-                            st.session_state.register_error = message
+                            st.session_state.show_error_popup = True
+                            st.session_state.popup_message = message
                             st.rerun()
-
-        # 显示注册成功信息
-        if st.session_state.get('register_success'):
-            username = st.session_state.get('register_username', '用户')
-            st.session_state.register_success = False
-            st.session_state.register_username = None
-
-            st.balloons()
-            st.success(f"✅ 注册成功！欢迎 {username}")
-            st.info("⏰ 2秒后自动跳转到登录页...")
-            time.sleep(2)
-            st.session_state.register_mode = False
-            st.rerun()
-
-        # 显示注册错误信息
-        if st.session_state.get('register_error'):
-            error_msg = st.session_state.register_error
-            st.session_state.register_error = None
-            st.error(f"❌ 注册失败：{error_msg}")
 
     st.stop()
 
@@ -208,6 +348,17 @@ if st.session_state.get('admin_mode', False):
             with open(users_file, 'r', encoding='utf-8') as f:
                 users_data = json.load(f)
             st.metric("总用户数", len(users_data))
+
+            # 邮箱域名统计
+            domains = {}
+            for user_info in users_data.values():
+                email = user_info.get('email', '')
+                if '@' in email:
+                    domain = email.split('@')[1]
+                    domains[domain] = domains.get(domain, 0) + 1
+            if domains:
+                st.subheader("📧 邮箱域名分布")
+                st.json(domains)
 
     with tab3:
         st.subheader("系统设置")
