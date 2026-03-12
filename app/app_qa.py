@@ -1,6 +1,6 @@
 """
 智能客服主应用
-添加了用户注册登录功能 + 管理员独立界面 + 弹窗提示
+添加了用户注册登录功能 + 管理员独立界面 + 弹窗提示 + 知识库上传
 """
 import sys
 import os
@@ -41,7 +41,9 @@ if 'popup_message' not in st.session_state:
 if 'popup_username' not in st.session_state:
     st.session_state.popup_username = ""
 if 'selected_tab' not in st.session_state:
-    st.session_state.selected_tab = "登录"  # 默认显示登录页
+    st.session_state.selected_tab = "登录"
+if 'kb_service' not in st.session_state:
+    st.session_state.kb_service = None
 
 # ========== 管理员账户配置 ==========
 ADMIN_USERS = ["admin", "wanan"]
@@ -168,9 +170,9 @@ def show_success_popup(username):
         time.sleep(1)
     placeholder.empty()
 
-    # 关键修复：强制切换到登录模式
-    st.session_state.selected_tab = "登录"  # 切换到登录标签
-    st.session_state.register_mode = False  # 关闭注册模式
+    # 强制切换到登录模式
+    st.session_state.selected_tab = "登录"
+    st.session_state.register_mode = False
 
 # ========== 显示失败弹窗 ==========
 def show_error_popup(error_msg):
@@ -194,6 +196,13 @@ def show_error_popup(error_msg):
             """, unsafe_allow_html=True)
         time.sleep(1)
     placeholder.empty()
+
+# ========== 初始化知识库服务 ==========
+def init_kb_service():
+    if st.session_state.kb_service is None:
+        from core.knowledge_base import KnowledgeBaseService
+        st.session_state.kb_service = KnowledgeBaseService()
+    return st.session_state.kb_service
 
 # ========== 如果未登录，显示登录/注册界面 ==========
 if not st.session_state.logged_in:
@@ -219,12 +228,12 @@ if not st.session_state.logged_in:
     col1, col2, col3 = st.columns([1, 2, 1])
 
     with col2:
-        # 切换登录/注册模式 - 使用session_state保持状态
+        # 切换登录/注册模式
         mode = st.radio(
             "选择操作",
             ["登录", "注册"],
             horizontal=True,
-            key="selected_tab"  # 绑定到session_state
+            key="selected_tab"
         )
 
         if mode == "登录":
@@ -405,8 +414,96 @@ if st.session_state.get('admin_mode', False):
                               text=f"{domain}: {count}人 ({count/len(users_data)*100:.1f}%)")
 
     with tab3:
-        st.subheader("系统设置")
-        st.info("管理员设置功能开发中...")
+        st.subheader("📤 知识库管理")
+
+        # 创建两个子选项卡
+        sub_tab1, sub_tab2 = st.tabs(["📁 上传文档", "📊 知识库状态"])
+
+        with sub_tab1:
+            st.markdown("### 上传TXT文档到知识库")
+            st.caption("上传后文档会被分割、向量化，供问答使用")
+
+            # 初始化知识库服务
+            kb_service = init_kb_service()
+
+            # 文件上传
+            uploaded_file = st.file_uploader(
+                "选择TXT文件",
+                type=['txt'],
+                accept_multiple_files=False,
+                key="admin_file_uploader"
+            )
+
+            if uploaded_file is not None:
+                # 显示文件信息
+                file_name = uploaded_file.name
+                file_size = uploaded_file.size / 1024  # KB
+
+                col_f1, col_f2, col_f3 = st.columns(3)
+                with col_f1:
+                    st.info(f"📄 文件名: {file_name}")
+                with col_f2:
+                    st.info(f"📦 大小: {file_size:.2f} KB")
+                with col_f3:
+                    if st.button("🚀 开始上传", type="primary", use_container_width=True):
+                        with st.spinner("正在处理文档..."):
+                            try:
+                                # 读取文件内容
+                                text = uploaded_file.getvalue().decode("utf-8")
+
+                                # 上传到知识库
+                                result = kb_service.upload_by_str(text, file_name)
+
+                                if "成功" in result:
+                                    st.success(f"✅ {result}")
+                                    st.balloons()
+                                else:
+                                    st.warning(f"⚠️ {result}")
+
+                            except Exception as e:
+                                st.error(f"❌ 上传失败: {e}")
+
+        with sub_tab2:
+            st.markdown("### 知识库状态")
+
+            # 显示知识库统计
+            try:
+                kb_service = init_kb_service()
+
+                # 获取向量库中文档数量
+                count = kb_service.chroma._collection.count()
+                st.metric("📊 文档片段总数", count)
+
+                # 获取所有文档的元数据
+                if count > 0:
+                    all_docs = kb_service.chroma.get()
+                    sources = {}
+                    for metadata in all_docs['metadatas']:
+                        if metadata and 'source' in metadata:
+                            source = metadata['source']
+                            sources[source] = sources.get(source, 0) + 1
+
+                    if sources:
+                        st.subheader("📁 文档来源统计")
+                        for source, num in sources.items():
+                            st.progress(num / count, text=f"{source}: {num}个片段")
+
+                    # 显示最近上传
+                    st.subheader("🕒 最近上传")
+                    recent = sorted(all_docs['metadatas'],
+                                  key=lambda x: x.get('create_time', ''),
+                                  reverse=True)[:5]
+                    for meta in recent:
+                        if meta:
+                            st.caption(f"📄 {meta.get('source', '未知')} - {meta.get('create_time', '未知')}")
+                else:
+                    st.info("知识库暂无数据，请上传文档")
+            except Exception as e:
+                st.warning(f"无法读取知识库状态: {e}")
+
+            # 刷新按钮
+            if st.button("🔄 刷新状态"):
+                st.rerun()
 
     with st.sidebar:
         st.markdown(f"### 👑 管理员：**{st.session_state.username}**")
