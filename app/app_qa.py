@@ -10,6 +10,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 import time
+import json
 import streamlit as st
 from core.rag import RagService
 from auth.auth import auth_manager
@@ -112,7 +113,44 @@ if not st.session_state.logged_in:
                         )
                         if success:
                             st.success("注册成功！请登录")
-                            time.sleep(2)
+
+                            # ========== 添加数据验证 ==========
+                            with st.expander("📊 数据验证（查看注册结果）"):
+                                users_file = os.path.join(project_root, "auth", "users.json")
+                                st.write(f"用户文件路径: {users_file}")
+                                st.write(f"文件是否存在: {os.path.exists(users_file)}")
+
+                                if os.path.exists(users_file):
+                                    try:
+                                        with open(users_file, 'r', encoding='utf-8') as f:
+                                            current_users = json.load(f)
+                                        st.write(f"当前用户总数: {len(current_users)}")
+
+                                        # 显示所有用户
+                                        st.subheader("已注册用户列表")
+                                        for uname, uinfo in current_users.items():
+                                            with st.container():
+                                                col_u1, col_u2 = st.columns(2)
+                                                with col_u1:
+                                                    st.write(f"**用户名:** {uname}")
+                                                    st.write(f"**邮箱:** {uinfo.get('email', '无')}")
+                                                with col_u2:
+                                                    st.write(f"**会话ID:** {uinfo.get('session_id', '无')}")
+                                                    st.write(f"**注册时间:** {uinfo.get('created_at', '无')}")
+                                                st.divider()
+
+                                        # 检查刚注册的用户
+                                        if username in current_users:
+                                            st.success(f"✅ 用户 '{username}' 成功写入文件！")
+                                        else:
+                                            st.error(f"❌ 用户 '{username}' 未在文件中找到！")
+
+                                    except Exception as e:
+                                        st.error(f"读取文件失败: {e}")
+                                else:
+                                    st.error("users.json 文件不存在，请检查 auth 文件夹")
+
+                            time.sleep(3)
                             st.rerun()
                         else:
                             st.error(message)
@@ -127,6 +165,19 @@ with st.sidebar:
     st.markdown(f"### 👋 欢迎，**{st.session_state.username}**")
     st.markdown(f"📧 {st.session_state.email}")
     st.markdown("---")
+
+    # 添加数据查看功能（仅管理员）
+    if st.session_state.username == "wanan" or st.session_state.username == "admin":  # 改成你的管理员用户名
+        with st.expander("🔐 管理员功能"):
+            if st.button("📊 查看所有用户"):
+                users_file = os.path.join(project_root, "auth", "users.json")
+                if os.path.exists(users_file):
+                    with open(users_file, 'r', encoding='utf-8') as f:
+                        users_data = json.load(f)
+                    st.write(f"当前用户数: {len(users_data)}")
+                    st.json(users_data)
+                else:
+                    st.error("用户文件不存在")
 
     # 退出登录按钮
     if st.button("🚪 退出登录", use_container_width=True):
