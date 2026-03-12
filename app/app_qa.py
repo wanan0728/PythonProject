@@ -1,6 +1,6 @@
 """
 智能客服主应用
-添加了用户注册登录功能 + 管理员独立界面
+添加了用户注册登录功能 + 管理员独立界面 + 滑块验证
 """
 import sys
 import os
@@ -11,6 +11,7 @@ if project_root not in sys.path:
 
 import time
 import json
+import random
 import streamlit as st
 from core.rag import RagService
 from auth.auth import auth_manager
@@ -29,28 +30,95 @@ if 'logged_in' not in st.session_state:
 if 'register_mode' not in st.session_state:
     st.session_state.register_mode = False
 if 'admin_mode' not in st.session_state:
-    st.session_state.admin_mode = False  # 管理员模式标识
+    st.session_state.admin_mode = False
 if 'current_user' not in st.session_state:
     st.session_state.current_user = None
+if 'captcha_passed' not in st.session_state:
+    st.session_state.captcha_passed = False
+if 'captcha_position' not in st.session_state:
+    st.session_state.captcha_position = random.randint(20, 80)  # 随机生成滑块目标位置
 
-# ========== 管理员账户配置（可以修改成你自己的）==========
+# ========== 管理员账户配置 ==========
 ADMIN_USERS = ["admin", "wanan"]  # 这里设置哪些用户名是管理员
-ADMIN_PASSWORD = "admin123"  # 管理员专用密码（可选，如果不设置则用普通用户密码）
+
+# ========== 滑块验证码组件 ==========
+def render_captcha():
+    """渲染滑块验证码"""
+    st.markdown("### 🧩 人机验证")
+    st.markdown("请将滑块拖动到正确位置")
+
+    # 创建滑块容器
+    col1, col2, col3 = st.columns([1, 3, 1])
+
+    with col2:
+        # 显示验证码背景提示
+        st.markdown("""
+        <style>
+        .captcha-bg {
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        </style>
+        <div class="captcha-bg">
+            <span style="font-size: 24px;">🐻 请按住滑块拖动完成拼图</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # 使用 slider 作为滑块
+        slider_value = st.slider(
+            "拖动滑块验证",
+            min_value=0,
+            max_value=100,
+            value=0,
+            key="captcha_slider",
+            label_visibility="collapsed"
+        )
+
+        # 显示验证状态
+        if slider_value > 0:
+            target = st.session_state.captcha_position
+            # 允许5%的误差
+            if abs(slider_value - target) <= 5:
+                st.success("✅ 验证通过！")
+                st.session_state.captcha_passed = True
+                return True
+            else:
+                if slider_value > 0:
+                    st.error("❌ 验证失败，请重试")
+                    # 重置滑块
+                    st.session_state.captcha_position = random.randint(20, 80)
+                    st.rerun()
+
+    return False
 
 # ========== 如果未登录，显示登录/注册界面 ==========
 if not st.session_state.logged_in:
     st.title("🤖 智能客服系统")
     st.markdown("---")
 
-    # 创建三列布局（增加一列用于管理员登录提示）
+    # 创建三列布局
     col1, col2, col3 = st.columns([1, 2, 1])
 
     with col2:
+        # 先显示滑块验证（如果没有通过）
+        if not st.session_state.captcha_passed:
+            captcha_success = render_captcha()
+            if captcha_success:
+                st.rerun()
+            st.stop()
+
+        # 验证通过后显示登录/注册界面
+        st.success("✅ 人机验证通过，请登录")
+
         # 切换登录/注册模式
         mode = st.radio("选择操作", ["登录", "注册"], horizontal=True)
 
         if mode == "登录":
-            # 添加管理员登录提示（小字）
+            # 添加管理员登录提示
             st.caption("👑 管理员请使用管理员账户登录")
 
             st.subheader("🔐 用户登录")
@@ -59,7 +127,7 @@ if not st.session_state.logged_in:
                 username = st.text_input("用户名", placeholder="请输入用户名")
                 password = st.text_input("密码", type="password", placeholder="请输入密码")
 
-                # 高级选项（可以展开）
+                # 高级选项
                 with st.expander("🔧 高级选项"):
                     admin_login = st.checkbox("以管理员身份登录")
 
@@ -92,6 +160,8 @@ if not st.session_state.logged_in:
                                 else:
                                     st.session_state.admin_mode = False
                                     st.success("登录成功！")
+                                # 重置验证码状态
+                                st.session_state.captcha_passed = False
                                 st.rerun()
                         else:
                             st.error(message)
@@ -146,7 +216,7 @@ if not st.session_state.logged_in:
                         if success:
                             st.success("注册成功！请登录")
 
-                            # ========== 数据验证 ==========
+                            # 数据验证
                             with st.expander("📊 数据验证（查看注册结果）"):
                                 users_file = os.path.join(project_root, "auth", "users.json")
                                 st.write(f"用户文件路径: {users_file}")
@@ -189,6 +259,11 @@ if not st.session_state.logged_in:
 
     # 未登录状态不显示主内容
     st.stop()
+
+# ========== 重置验证码状态的函数 ==========
+def reset_captcha():
+    st.session_state.captcha_passed = False
+    st.session_state.captcha_position = random.randint(20, 80)
 
 # ========== 已登录，根据角色显示不同界面 ==========
 
@@ -329,7 +404,7 @@ if st.session_state.get('admin_mode', False):
             st.subheader("📅 注册时间分布")
             dates = {}
             for user_info in users_data.values():
-                date = user_info.get('created_at', '未知')[:10]  # 只取日期部分
+                date = user_info.get('created_at', '未知')[:10]
                 dates[date] = dates.get(date, 0) + 1
 
             if dates:
@@ -373,6 +448,7 @@ if st.session_state.get('admin_mode', False):
         if st.button("🚪 退出登录", use_container_width=True):
             auth_manager.logout()
             st.session_state.admin_mode = False
+            reset_captcha()  # 重置验证码
             st.rerun()
 
 # ========== 普通用户界面 ==========
@@ -394,6 +470,7 @@ else:
         # 退出登录按钮
         if st.button("🚪 退出登录", use_container_width=True):
             auth_manager.logout()
+            reset_captcha()  # 重置验证码
             st.rerun()
 
         st.markdown("---")
