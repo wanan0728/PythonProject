@@ -1,19 +1,30 @@
+import sys
+import os
+# 获取项目根目录的绝对路径
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 from langchain_core.documents import Document
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough, RunnableWithMessageHistory, RunnableLambda
-from file_history_store import get_history
-from vector_stores import VectorStoreService
+from history.file_history_store import get_history
+from core.vector_stores import VectorStoreService
 from langchain_community.embeddings import DashScopeEmbeddings
-import config_data as config
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_community.chat_models.tongyi import ChatTongyi
+
+# 直接导入配置变量
+from config.config_data import (
+    DASHSCOPE_API_KEY, embedding_model_name, chat_model_name,
+    similarity_threshold
+)
 
 
 def print_prompt(prompt):
     print("="*20)
     print(prompt.to_string())
     print("="*20)
-
     return prompt
 
 
@@ -22,8 +33,8 @@ class RagService(object):
 
         # 创建嵌入模型实例，传入API key
         self.embeddings = DashScopeEmbeddings(
-            model=config.embedding_model_name,
-            dashscope_api_key=config.DASHSCOPE_API_KEY  # 从配置文件获取API key
+            model=embedding_model_name,
+            dashscope_api_key=DASHSCOPE_API_KEY
         )
 
         self.vector_service = VectorStoreService(
@@ -41,8 +52,8 @@ class RagService(object):
         )
 
         self.chat_model = ChatTongyi(
-            model=config.chat_model_name,
-            dashscope_api_key=config.DASHSCOPE_API_KEY  # 如果需要，也添加到ChatTongyi
+            model=chat_model_name,
+            dashscope_api_key=DASHSCOPE_API_KEY
         )
 
         self.chain = self.__get_chain()

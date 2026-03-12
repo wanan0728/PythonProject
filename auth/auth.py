@@ -2,31 +2,40 @@
 用户认证模块
 功能：处理用户注册、登录、会话管理
 """
-import json
+import sys
 import os
+# 获取项目根目录的绝对路径
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+import json
 import hashlib
 import streamlit as st
-from email_utils import EmailVerification
-import config_data as config
+from auth.email_utils import EmailVerification
+
+# 直接导入配置变量
+from config.config_data import SENDER_EMAIL, SENDER_PASSWORD, SMTP_SERVER, SMTP_PORT
 
 # 用户数据文件路径
-USERS_FILE = "users.json"
+USERS_FILE = os.path.join(project_root, "auth", "users.json")
 
 
 class AuthManager:
     def __init__(self):
         """初始化认证管理器"""
         self.email_verification = EmailVerification(
-            sender_email=config.SENDER_EMAIL,
-            sender_password=config.SENDER_PASSWORD,
-            smtp_server=config.SMTP_SERVER,
-            smtp_port=config.SMTP_PORT
+            sender_email=SENDER_EMAIL,
+            sender_password=SENDER_PASSWORD,
+            smtp_server=SMTP_SERVER,
+            smtp_port=SMTP_PORT
         )
         self._init_users_file()
 
     def _init_users_file(self):
         """初始化用户文件"""
         if not os.path.exists(USERS_FILE):
+            os.makedirs(os.path.dirname(USERS_FILE), exist_ok=True)
             with open(USERS_FILE, 'w', encoding='utf-8') as f:
                 json.dump({}, f)
 

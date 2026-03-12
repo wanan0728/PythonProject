@@ -2,6 +2,13 @@
 邮箱验证码工具
 功能：生成6位数字验证码，发送到用户邮箱
 """
+import sys
+import os
+# 获取项目根目录的绝对路径
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 import smtplib
 import random
 import string
@@ -10,9 +17,9 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import Dict
 import streamlit as st
+import socket
 
 # 存储验证码的临时字典（key:邮箱, value:{code:验证码, expires:过期时间}）
-# 生产环境建议用Redis，这里用字典简化
 if 'verification_codes' not in st.session_state:
     st.session_state.verification_codes = {}
 
@@ -31,6 +38,13 @@ class EmailVerification:
         self.smtp_server = smtp_server
         self.smtp_port = smtp_port
 
+        # 调试信息
+        print(f"📧 EmailVerification初始化:")
+        print(f"   - 发件人: {sender_email}")
+        print(f"   - 服务器: {smtp_server}")
+        print(f"   - 端口: {smtp_port}")
+        print(f"   - 密码已设置: {'是' if sender_password else '否'}")
+
     def generate_code(self, length: int = 6) -> str:
         """生成6位数字验证码"""
         return ''.join(random.choices(string.digits, k=length))
@@ -42,8 +56,11 @@ class EmailVerification:
         :return: 是否发送成功
         """
         try:
+            print(f"📧 开始发送验证码到: {to_email}")
+
             # 生成6位数字验证码
             code = self.generate_code()
+            print(f"📧 生成验证码: {code}")
 
             # 存储验证码，5分钟过期
             st.session_state.verification_codes[to_email] = {
@@ -77,16 +94,41 @@ class EmailVerification:
 
             msg.attach(MIMEText(html_content, 'html', 'utf-8'))
 
+            print(f"📧 正在连接SMTP服务器 {self.smtp_server}:{self.smtp_port}...")
+
             # 发送邮件
-            server = smtplib.SMTP_SSL(self.smtp_server, self.smtp_port)
+            server = smtplib.SMTP_SSL(self.smtp_server, self.smtp_port, timeout=30)
+            print(f"📧 SMTP连接成功")
+
+            print(f"📧 正在登录...")
             server.login(self.sender_email, self.sender_password)
+            print(f"📧 登录成功")
+
+            print(f"📧 正在发送邮件...")
             server.send_message(msg)
+            print(f"📧 邮件发送成功")
+
             server.quit()
+            print(f"📧 SMTP连接已关闭")
 
             return True
 
+        except smtplib.SMTPAuthenticationError as e:
+            print(f"❌ SMTP认证失败: {e}")
+            print(f"   - 请检查邮箱授权码是否正确")
+            return False
+        except smtplib.SMTPConnectError as e:
+            print(f"❌ SMTP连接失败: {e}")
+            print(f"   - 请检查网络连接和防火墙设置")
+            return False
+        except socket.gaierror as e:
+            print(f"❌ 无法解析服务器地址: {e}")
+            print(f"   - 请检查SMTP服务器地址是否正确")
+            return False
         except Exception as e:
-            print(f"邮件发送失败: {e}")
+            print(f"❌ 邮件发送失败: {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
     def verify_code(self, email: str, code: str) -> bool:
@@ -97,20 +139,24 @@ class EmailVerification:
         :return: 是否验证成功
         """
         if email not in st.session_state.verification_codes:
+            print(f"验证码验证失败: 邮箱 {email} 没有找到验证码记录")
             return False
 
         data = st.session_state.verification_codes[email]
 
         # 检查是否过期
         if time.time() > data['expires_at']:
+            print(f"验证码验证失败: 验证码已过期")
             # 删除过期验证码
             del st.session_state.verification_codes[email]
             return False
 
         # 验证码是否正确
         if data['code'] == code:
+            print(f"验证码验证成功")
             # 验证成功后删除，防止重复使用
             del st.session_state.verification_codes[email]
             return True
 
+        print(f"验证码验证失败: 验证码不匹配")
         return False

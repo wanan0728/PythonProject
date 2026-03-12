@@ -2,11 +2,17 @@
 智能客服主应用
 添加了用户注册登录功能
 """
+import sys
+import os
+# 获取项目根目录的绝对路径
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 import time
 import streamlit as st
-from rag import RagService
-import config_data as config
-from auth import auth_manager
+from core.rag import RagService
+from auth.auth import auth_manager
 
 # 页面配置
 st.set_page_config(
@@ -52,10 +58,6 @@ if not st.session_state.logged_in:
                             st.session_state.username = username
                             st.session_state.email = user_data['email']
                             st.session_state.session_id = user_data['session_id']
-
-                            # 更新会话配置
-                            config.session_config['configurable']['session_id'] = user_data['session_id']
-
                             st.success("登录成功！")
                             st.rerun()
                         else:
@@ -180,12 +182,10 @@ if prompt:
                 user_session_config
             )
 
-
             def capture(generator, cache_list):
                 for chunk in generator:
                     cache_list.append(chunk)
                     yield chunk
-
 
             # 流式显示回答
             response = st.chat_message("assistant").write_stream(capture(res_stream, ai_res_list))

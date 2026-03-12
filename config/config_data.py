@@ -6,13 +6,12 @@ from dotenv import load_dotenv
 from pathlib import Path
 
 # ========== 强制加载.env文件 ==========
-# 方法1：使用绝对路径
-env_path = Path(__file__).parent / '.env'
-load_dotenv(dotenv_path=env_path, override=True)
+# 获取项目根目录（config文件夹的上一级）
+project_root = Path(__file__).parent.parent
+env_path = project_root / '.env'
 
-# 方法2：如果上面不行，试试直接指定路径（取消下面两行的注释试试）
-# env_path = r"C:\Users\123\Desktop\编程\PythonProject\.env"
-# load_dotenv(dotenv_path=env_path, override=True)
+# 加载.env文件
+load_dotenv(dotenv_path=env_path, override=True)
 
 print(f"✅ 尝试加载.env文件: {env_path}")
 print(f"✅ 文件是否存在: {env_path.exists()}")
@@ -36,9 +35,9 @@ if not SENDER_EMAIL or not SENDER_PASSWORD:
     raise ValueError("请在.env文件中设置邮箱配置")
 
 # ========== 知识库配置 ==========
-md5_path = "./md5.text"
+md5_path = "./data/md5.text"
 collection_name = "rag"
-persist_directory = "./chroma_db"
+persist_directory = "./data/chroma_db"
 
 # ========== 文本分割配置 ==========
 chunk_size = 1000
