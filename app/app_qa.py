@@ -467,22 +467,35 @@ if st.session_state.get('admin_mode', False):
 else:
     # 侧边栏显示用户信息
     with st.sidebar:
-        # 如果是管理员但没用管理员模式，提示可以切换
-        if st.session_state.username in ADMIN_USERS:
+        # 安全地检查用户是否是管理员
+        if st.session_state.get('username') and st.session_state.username in ADMIN_USERS:
             st.info("👑 您是管理员，可以切换到管理员模式")
             if st.button("🔐 进入管理员模式", use_container_width=True):
                 st.session_state.admin_mode = True
                 st.rerun()
             st.markdown("---")
 
-        st.markdown(f"### 👋 欢迎，**{st.session_state.username}**")
-        st.markdown(f"📧 {st.session_state.email}")
+        # 确保用户名存在再显示
+        if st.session_state.get('username'):
+            st.markdown(f"### 👋 欢迎，**{st.session_state.username}**")
+            st.markdown(f"📧 {st.session_state.get('email', '')}")
+        else:
+            st.markdown("### 👋 欢迎")
+
         st.markdown("---")
 
         # 退出登录按钮
         if st.button("🚪 退出登录", use_container_width=True):
             auth_manager.logout()
             st.rerun()
+
+        st.markdown("---")
+        st.markdown("### 📊 使用说明")
+        st.markdown("""
+        1. 输入问题，AI会基于知识库回答
+        2. 支持多轮对话
+        3. 历史记录自动保存
+        """)
 
         st.markdown("---")
         st.markdown("### 📊 使用说明")
