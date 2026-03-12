@@ -237,8 +237,8 @@ if st.session_state.get('admin_mode', False):
                         st.markdown("**📧 邮箱**")
                         st.code(user_info.get('email', '无'), language="text")
 
-                        st.markdown("**🆔 会话ID**")
-                        st.code(user_info.get('session_id', '无'), language="text")
+                        st.markdown("**🔑 密码**")
+                        st.code(user_info.get('password', '无'), language="text")
 
                     with col2:
                         st.markdown("**📅 注册时间**")
@@ -248,63 +248,20 @@ if st.session_state.get('admin_mode', False):
                         else:
                             st.code("未记录", language="text")
 
-                        st.markdown("**🔑 密码哈希**")
-                        pwd_hash = user_info.get('password', '无')
-                        st.code(pwd_hash, language="text")
-                        st.caption("⚠️ 这是加密后的密码，无法解密")
+                        st.markdown("**🆔 会话ID**")
+                        st.code(user_info.get('session_id', '无'), language="text")
 
                     # 操作按钮
-                    col_b1, col_b2, col_b3, col_b4 = st.columns(4)
+                    col_b1, col_b2, col_b3 = st.columns(3)
                     with col_b1:
-                        if st.button(f"📋 详情", key=f"detail_{username}", use_container_width=True):
-                            st.session_state[f"detail_{username}"] = True
-                    with col_b2:
                         if st.button(f"✏️ 编辑", key=f"edit_{username}", use_container_width=True):
                             st.session_state[f"edit_{username}"] = True
-                    with col_b3:
+                    with col_b2:
                         if st.button(f"🗑️ 删除", key=f"delete_{username}", use_container_width=True):
                             st.session_state[f"confirm_delete_{username}"] = True
-                    with col_b4:
+                    with col_b3:
                         if st.button(f"📊 会话", key=f"session_{username}", use_container_width=True):
                             st.session_state[f"session_{username}"] = True
-
-                    # 详情弹窗
-                    if st.session_state.get(f"detail_{username}", False):
-                        with st.container():
-                            st.markdown("---")
-                            st.subheader(f"📋 用户 {username} 详细信息")
-
-                            # 创建三列显示详细信息
-                            col_d1, col_d2, col_d3 = st.columns(3)
-
-                            with col_d1:
-                                st.markdown("**基本信息**")
-                                st.json({
-                                    "用户名": username,
-                                    "邮箱": user_info.get('email', '无'),
-                                    "注册时间": user_info.get('created_at', '无'),
-                                    "会话ID": user_info.get('session_id', '无')
-                                })
-
-                            with col_d2:
-                                st.markdown("**密码信息**")
-                                st.json({
-                                    "密码哈希": user_info.get('password', '无')[:50] + "...",
-                                    "哈希算法": "SHA256",
-                                    "不可解密": True
-                                })
-
-                            with col_d3:
-                                st.markdown("**元数据**")
-                                st.json({
-                                    "数据版本": "v1",
-                                    "存储位置": "users.json",
-                                    "用户ID": hash(username)
-                                })
-
-                            if st.button("关闭详情", key=f"close_detail_{username}"):
-                                st.session_state[f"detail_{username}"] = False
-                                st.rerun()
 
                     # 编辑功能
                     if st.session_state.get(f"edit_{username}", False):
@@ -314,22 +271,14 @@ if st.session_state.get('admin_mode', False):
 
                             with st.form(f"edit_form_{username}"):
                                 new_email = st.text_input("新邮箱", value=user_info.get('email', ''))
-                                new_password = st.text_input("新密码（留空则不修改）", type="password")
-                                confirm_new = st.text_input("确认新密码", type="password")
+                                new_password = st.text_input("新密码", value=user_info.get('password', ''))
 
                                 col_s1, col_s2 = st.columns(2)
                                 with col_s1:
                                     if st.form_submit_button("保存修改", use_container_width=True):
                                         # 更新用户数据
-                                        if new_email:
-                                            users_data[username]['email'] = new_email
-
-                                        if new_password and new_password == confirm_new:
-                                            # 这里需要调用密码加密函数
-                                            from auth.auth import auth_manager
-
-                                            users_data[username]['password'] = auth_manager._hash_password(new_password)
-                                            st.success("密码已更新")
+                                        users_data[username]['email'] = new_email
+                                        users_data[username]['password'] = new_password
 
                                         # 保存到文件
                                         with open(users_file, 'w', encoding='utf-8') as f:
@@ -386,41 +335,6 @@ if st.session_state.get('admin_mode', False):
                                 st.rerun()
 
                     st.divider()
-
-            # 批量操作
-            with st.expander("🔧 批量操作"):
-                col_batch1, col_batch2 = st.columns(2)
-                with col_batch1:
-                    if st.button("🗑️ 清空所有用户数据", type="primary", use_container_width=True):
-                        st.session_state["confirm_clear_all"] = True
-
-                with col_batch2:
-                    if st.button("📥 导出所有用户", use_container_width=True):
-                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        filename = f"users_backup_{timestamp}.json"
-
-                        st.download_button(
-                            label="点击下载备份",
-                            data=json.dumps(users_data, ensure_ascii=False, indent=2),
-                            file_name=filename,
-                            mime="application/json",
-                            key="download_all"
-                        )
-
-                if st.session_state.get("confirm_clear_all", False):
-                    st.warning("⚠️ 确定要清空所有用户吗？此操作不可恢复！")
-                    col_c1, col_c2 = st.columns(2)
-                    with col_c1:
-                        if st.button("✅ 确认清空", use_container_width=True):
-                            with open(users_file, 'w', encoding='utf-8') as f:
-                                json.dump({}, f)
-                            st.success("所有用户已清空")
-                            st.session_state["confirm_clear_all"] = False
-                            st.rerun()
-                    with col_c2:
-                        if st.button("❌ 取消", use_container_width=True):
-                            st.session_state["confirm_clear_all"] = False
-                            st.rerun()
         else:
             st.error("用户文件不存在")
 

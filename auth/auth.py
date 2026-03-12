@@ -10,12 +10,10 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 import json
-import hashlib
 import streamlit as st
 from auth.email_utils import EmailVerification
-
-# 直接导入配置变量
 from config.config_data import SENDER_EMAIL, SENDER_PASSWORD, SMTP_SERVER, SMTP_PORT
+from datetime import datetime
 
 # 用户数据文件路径
 USERS_FILE = os.path.join(project_root, "auth", "users.json")
@@ -38,10 +36,6 @@ class AuthManager:
             os.makedirs(os.path.dirname(USERS_FILE), exist_ok=True)
             with open(USERS_FILE, 'w', encoding='utf-8') as f:
                 json.dump({}, f)
-
-    def _hash_password(self, password: str) -> str:
-        """密码加密"""
-        return hashlib.sha256(password.encode()).hexdigest()
 
     def _load_users(self) -> dict:
         """加载所有用户"""
@@ -78,11 +72,11 @@ class AuthManager:
         if username in users:
             return False, "用户名已存在"
 
-        # 5. 创建新用户
+        # 5. 创建新用户（密码明文存储 + 记录注册时间）
         users[username] = {
             'email': email,
-            'password': self._hash_password(password),
-            'created_at': str(st.session_state.get('current_time', '')),
+            'password': password,  # 直接存储明文密码
+            'created_at': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),  # 记录注册时间
             'session_id': f"{username}_{hash(username)}"
         }
 
@@ -102,9 +96,9 @@ class AuthManager:
             return False, "用户名不存在", None
 
         user_data = users[username]
-        hashed_password = self._hash_password(password)
 
-        if user_data['password'] != hashed_password:
+        # 直接比对明文密码
+        if user_data['password'] != password:
             return False, "密码错误", None
 
         return True, "登录成功", user_data
