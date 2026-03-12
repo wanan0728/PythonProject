@@ -214,78 +214,211 @@ if st.session_state.get('admin_mode', False):
 
             st.write(f"当前总用户数：{len(users_data)}")
 
-            # 遍历显示每个用户
+            # 添加搜索框
+            search_term = st.text_input("🔍 搜索用户（用户名/邮箱）", placeholder="输入关键字搜索...")
+
+            # 过滤用户
+            filtered_users = {}
             for username, user_info in users_data.items():
-                with st.container():
-                    col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
+                if search_term:
+                    if (search_term.lower() in username.lower() or
+                            search_term.lower() in user_info.get('email', '').lower()):
+                        filtered_users[username] = user_info
+                else:
+                    filtered_users = users_data
+
+            # 遍历显示每个用户
+            for username, user_info in filtered_users.items():
+                with st.expander(f"👤 用户：{username}", expanded=False):
+                    # 用户基本信息
+                    col1, col2 = st.columns(2)
 
                     with col1:
-                        st.write(f"**用户名：** {username}")
-                        st.write(f"📧 {user_info.get('email', '无')}")
+                        st.markdown("**📧 邮箱**")
+                        st.code(user_info.get('email', '无'), language="text")
+
+                        st.markdown("**🆔 会话ID**")
+                        st.code(user_info.get('session_id', '无'), language="text")
 
                     with col2:
-                        st.write(f"**会话ID：** {user_info.get('session_id', '无')[:20]}...")
-                        st.write(f"**注册时间：** {user_info.get('created_at', '未知')}")
+                        st.markdown("**📅 注册时间**")
+                        reg_time = user_info.get('created_at', '未知')
+                        if reg_time:
+                            st.code(reg_time, language="text")
+                        else:
+                            st.code("未记录", language="text")
 
-                    with col3:
-                        # 操作按钮
-                        if st.button(f"✏️ 编辑", key=f"edit_{username}"):
-                            st.session_state[f"editing_{username}"] = True
+                        st.markdown("**🔑 密码哈希**")
+                        pwd_hash = user_info.get('password', '无')
+                        st.code(pwd_hash, language="text")
+                        st.caption("⚠️ 这是加密后的密码，无法解密")
 
-                        if st.button(f"📋 详情", key=f"detail_{username}"):
+                    # 操作按钮
+                    col_b1, col_b2, col_b3, col_b4 = st.columns(4)
+                    with col_b1:
+                        if st.button(f"📋 详情", key=f"detail_{username}", use_container_width=True):
                             st.session_state[f"detail_{username}"] = True
-
-                    with col4:
-                        # 删除按钮（带确认）
-                        if st.button(f"🗑️ 删除", key=f"delete_{username}"):
+                    with col_b2:
+                        if st.button(f"✏️ 编辑", key=f"edit_{username}", use_container_width=True):
+                            st.session_state[f"edit_{username}"] = True
+                    with col_b3:
+                        if st.button(f"🗑️ 删除", key=f"delete_{username}", use_container_width=True):
                             st.session_state[f"confirm_delete_{username}"] = True
+                    with col_b4:
+                        if st.button(f"📊 会话", key=f"session_{username}", use_container_width=True):
+                            st.session_state[f"session_{username}"] = True
 
-                    # 详情显示
+                    # 详情弹窗
                     if st.session_state.get(f"detail_{username}", False):
-                        with st.expander(f"用户 {username} 详细信息", expanded=True):
-                            st.json(user_info)
-                            if st.button("关闭", key=f"close_{username}"):
+                        with st.container():
+                            st.markdown("---")
+                            st.subheader(f"📋 用户 {username} 详细信息")
+
+                            # 创建三列显示详细信息
+                            col_d1, col_d2, col_d3 = st.columns(3)
+
+                            with col_d1:
+                                st.markdown("**基本信息**")
+                                st.json({
+                                    "用户名": username,
+                                    "邮箱": user_info.get('email', '无'),
+                                    "注册时间": user_info.get('created_at', '无'),
+                                    "会话ID": user_info.get('session_id', '无')
+                                })
+
+                            with col_d2:
+                                st.markdown("**密码信息**")
+                                st.json({
+                                    "密码哈希": user_info.get('password', '无')[:50] + "...",
+                                    "哈希算法": "SHA256",
+                                    "不可解密": True
+                                })
+
+                            with col_d3:
+                                st.markdown("**元数据**")
+                                st.json({
+                                    "数据版本": "v1",
+                                    "存储位置": "users.json",
+                                    "用户ID": hash(username)
+                                })
+
+                            if st.button("关闭详情", key=f"close_detail_{username}"):
                                 st.session_state[f"detail_{username}"] = False
                                 st.rerun()
 
+                    # 编辑功能
+                    if st.session_state.get(f"edit_{username}", False):
+                        with st.container():
+                            st.markdown("---")
+                            st.subheader(f"✏️ 编辑用户 {username}")
+
+                            with st.form(f"edit_form_{username}"):
+                                new_email = st.text_input("新邮箱", value=user_info.get('email', ''))
+                                new_password = st.text_input("新密码（留空则不修改）", type="password")
+                                confirm_new = st.text_input("确认新密码", type="password")
+
+                                col_s1, col_s2 = st.columns(2)
+                                with col_s1:
+                                    if st.form_submit_button("保存修改", use_container_width=True):
+                                        # 更新用户数据
+                                        if new_email:
+                                            users_data[username]['email'] = new_email
+
+                                        if new_password and new_password == confirm_new:
+                                            # 这里需要调用密码加密函数
+                                            from auth.auth import auth_manager
+
+                                            users_data[username]['password'] = auth_manager._hash_password(new_password)
+                                            st.success("密码已更新")
+
+                                        # 保存到文件
+                                        with open(users_file, 'w', encoding='utf-8') as f:
+                                            json.dump(users_data, f, ensure_ascii=False, indent=2)
+
+                                        st.success("用户信息已更新")
+                                        st.session_state[f"edit_{username}"] = False
+                                        st.rerun()
+
+                                with col_s2:
+                                    if st.form_submit_button("取消", use_container_width=True):
+                                        st.session_state[f"edit_{username}"] = False
+                                        st.rerun()
+
                     # 删除确认
                     if st.session_state.get(f"confirm_delete_{username}", False):
-                        col_warn1, col_warn2, col_warn3 = st.columns([2, 1, 1])
-                        with col_warn1:
-                            st.warning(f"确定要删除用户 {username} 吗？")
-                        with col_warn2:
-                            if st.button("✅ 确认", key=f"confirm_yes_{username}"):
-                                # 执行删除
-                                del users_data[username]
-                                with open(users_file, 'w', encoding='utf-8') as f:
-                                    json.dump(users_data, f, ensure_ascii=False, indent=2)
-                                st.success(f"用户 {username} 已删除")
-                                st.session_state[f"confirm_delete_{username}"] = False
-                                st.rerun()
-                        with col_warn3:
-                            if st.button("❌ 取消", key=f"confirm_no_{username}"):
-                                st.session_state[f"confirm_delete_{username}"] = False
+                        with st.container():
+                            st.markdown("---")
+                            col_warn1, col_warn2, col_warn3 = st.columns([2, 1, 1])
+                            with col_warn1:
+                                st.warning(f"⚠️ 确定要删除用户 {username} 吗？此操作不可恢复！")
+                            with col_warn2:
+                                if st.button("✅ 确认删除", key=f"confirm_yes_{username}", use_container_width=True):
+                                    # 执行删除
+                                    del users_data[username]
+                                    with open(users_file, 'w', encoding='utf-8') as f:
+                                        json.dump(users_data, f, ensure_ascii=False, indent=2)
+                                    st.success(f"用户 {username} 已删除")
+                                    st.session_state[f"confirm_delete_{username}"] = False
+                                    st.rerun()
+                            with col_warn3:
+                                if st.button("❌ 取消", key=f"confirm_no_{username}", use_container_width=True):
+                                    st.session_state[f"confirm_delete_{username}"] = False
+                                    st.rerun()
+
+                    # 会话历史查看
+                    if st.session_state.get(f"session_{username}", False):
+                        with st.container():
+                            st.markdown("---")
+                            st.subheader(f"📊 用户 {username} 的会话历史")
+
+                            # 读取会话历史文件
+                            session_file = os.path.join(project_root, "data", "chat_history",
+                                                        user_info.get('session_id', ''))
+                            if os.path.exists(session_file):
+                                with open(session_file, 'r', encoding='utf-8') as f:
+                                    sessions = json.load(f)
+                                st.json(sessions)
+                            else:
+                                st.info("暂无会话历史")
+
+                            if st.button("关闭会话历史", key=f"close_session_{username}"):
+                                st.session_state[f"session_{username}"] = False
                                 st.rerun()
 
                     st.divider()
 
             # 批量操作
             with st.expander("🔧 批量操作"):
-                if st.button("🗑️ 清空所有用户数据", type="primary"):
-                    st.session_state["confirm_clear_all"] = True
+                col_batch1, col_batch2 = st.columns(2)
+                with col_batch1:
+                    if st.button("🗑️ 清空所有用户数据", type="primary", use_container_width=True):
+                        st.session_state["confirm_clear_all"] = True
+
+                with col_batch2:
+                    if st.button("📥 导出所有用户", use_container_width=True):
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        filename = f"users_backup_{timestamp}.json"
+
+                        st.download_button(
+                            label="点击下载备份",
+                            data=json.dumps(users_data, ensure_ascii=False, indent=2),
+                            file_name=filename,
+                            mime="application/json",
+                            key="download_all"
+                        )
 
                 if st.session_state.get("confirm_clear_all", False):
                     st.warning("⚠️ 确定要清空所有用户吗？此操作不可恢复！")
                     col_c1, col_c2 = st.columns(2)
                     with col_c1:
-                        if st.button("✅ 确认清空"):
+                        if st.button("✅ 确认清空", use_container_width=True):
                             with open(users_file, 'w', encoding='utf-8') as f:
                                 json.dump({}, f)
                             st.success("所有用户已清空")
                             st.session_state["confirm_clear_all"] = False
                             st.rerun()
                     with col_c2:
-                        if st.button("❌ 取消"):
+                        if st.button("❌ 取消", use_container_width=True):
                             st.session_state["confirm_clear_all"] = False
                             st.rerun()
         else:
