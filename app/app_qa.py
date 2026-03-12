@@ -40,6 +40,8 @@ if 'popup_message' not in st.session_state:
     st.session_state.popup_message = ""
 if 'popup_username' not in st.session_state:
     st.session_state.popup_username = ""
+if 'selected_tab' not in st.session_state:
+    st.session_state.selected_tab = "登录"  # 默认显示登录页
 
 # ========== 管理员账户配置 ==========
 ADMIN_USERS = ["admin", "wanan"]
@@ -132,6 +134,13 @@ st.markdown("""
     margin: 0 auto;
     font-weight: bold;
     color: #333;
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -158,6 +167,10 @@ def show_success_popup(username):
             """, unsafe_allow_html=True)
         time.sleep(1)
     placeholder.empty()
+
+    # 关键修复：强制切换到登录模式
+    st.session_state.selected_tab = "登录"  # 切换到登录标签
+    st.session_state.register_mode = False  # 关闭注册模式
 
 # ========== 显示失败弹窗 ==========
 def show_error_popup(error_msg):
@@ -190,7 +203,6 @@ if not st.session_state.logged_in:
         show_success_popup(st.session_state.popup_username)
         st.session_state.show_success_popup = False
         st.session_state.popup_username = ""
-        st.session_state.register_mode = False
         st.rerun()
 
     # 显示失败弹窗
@@ -207,8 +219,13 @@ if not st.session_state.logged_in:
     col1, col2, col3 = st.columns([1, 2, 1])
 
     with col2:
-        # 切换登录/注册模式
-        mode = st.radio("选择操作", ["登录", "注册"], horizontal=True)
+        # 切换登录/注册模式 - 使用session_state保持状态
+        mode = st.radio(
+            "选择操作",
+            ["登录", "注册"],
+            horizontal=True,
+            key="selected_tab"  # 绑定到session_state
+        )
 
         if mode == "登录":
             st.caption("👑 管理员请使用管理员账户登录")
@@ -326,7 +343,20 @@ if st.session_state.get('admin_mode', False):
 
             st.write(f"当前总用户数：{len(users_data)}")
 
+            # 搜索框
+            search_term = st.text_input("🔍 搜索用户", placeholder="输入用户名或邮箱...")
+
+            # 过滤用户
+            filtered_users = {}
             for username, user_info in users_data.items():
+                if search_term:
+                    if (search_term.lower() in username.lower() or
+                        search_term.lower() in user_info.get('email', '').lower()):
+                        filtered_users[username] = user_info
+                else:
+                    filtered_users = users_data
+
+            for username, user_info in filtered_users.items():
                 with st.expander(f"👤 用户：{username}"):
                     col1, col2 = st.columns(2)
                     with col1:
@@ -347,7 +377,18 @@ if st.session_state.get('admin_mode', False):
         if os.path.exists(users_file):
             with open(users_file, 'r', encoding='utf-8') as f:
                 users_data = json.load(f)
-            st.metric("总用户数", len(users_data))
+
+            # 基础统计
+            col_s1, col_s2, col_s3 = st.columns(3)
+            with col_s1:
+                st.metric("总用户数", len(users_data))
+            with col_s2:
+                # 今日注册数
+                today_count = sum(1 for u in users_data.values()
+                                if u.get('created_at', '').startswith(datetime.now().strftime("%Y-%m-%d")))
+                st.metric("今日注册", today_count)
+            with col_s3:
+                st.metric("文件大小", f"{os.path.getsize(users_file)} bytes")
 
             # 邮箱域名统计
             domains = {}
@@ -356,9 +397,12 @@ if st.session_state.get('admin_mode', False):
                 if '@' in email:
                     domain = email.split('@')[1]
                     domains[domain] = domains.get(domain, 0) + 1
+
             if domains:
                 st.subheader("📧 邮箱域名分布")
-                st.json(domains)
+                for domain, count in domains.items():
+                    st.progress(count / len(users_data),
+                              text=f"{domain}: {count}人 ({count/len(users_data)*100:.1f}%)")
 
     with tab3:
         st.subheader("系统设置")
@@ -366,9 +410,15 @@ if st.session_state.get('admin_mode', False):
 
     with st.sidebar:
         st.markdown(f"### 👑 管理员：**{st.session_state.username}**")
+        st.markdown(f"📧 {st.session_state.email}")
+        st.markdown("---")
+
+        # 退出管理员模式
         if st.button("🔙 退出管理员模式", use_container_width=True):
             st.session_state.admin_mode = False
             st.rerun()
+
+        # 退出登录
         if st.button("🚪 退出登录", use_container_width=True):
             auth_manager.logout()
             st.rerun()
@@ -376,6 +426,7 @@ if st.session_state.get('admin_mode', False):
 # 普通用户界面
 else:
     with st.sidebar:
+        # 如果是管理员但没用管理员模式，提示可以切换
         if st.session_state.get('username') and st.session_state.username in ADMIN_USERS:
             st.info("👑 您是管理员，可以切换到管理员模式")
             if st.button("🔐 进入管理员模式", use_container_width=True):
@@ -387,6 +438,7 @@ else:
         st.markdown(f"📧 {st.session_state.email}")
         st.markdown("---")
 
+        # 退出登录按钮
         if st.button("🚪 退出登录", use_container_width=True):
             auth_manager.logout()
             st.rerun()
@@ -399,28 +451,36 @@ else:
         3. 历史记录自动保存
         """)
 
+    # 标题
     st.title("🤖 智能客服")
     st.divider()
 
+    # 初始化消息历史
     if "message" not in st.session_state:
         st.session_state["message"] = [{"role": "assistant", "content": "你好，有什么可以帮助你？"}]
 
+    # 初始化RAG服务
     if "rag" not in st.session_state:
         with st.spinner("初始化服务..."):
             st.session_state["rag"] = RagService()
 
+    # 显示历史消息
     for message in st.session_state["message"]:
         st.chat_message(message["role"]).write(message["content"])
 
+    # 聊天输入
     prompt = st.chat_input("请输入您的问题...")
 
     if prompt:
+        # 显示用户消息
         st.chat_message("user").write(prompt)
         st.session_state["message"].append({"role": "user", "content": prompt})
 
+        # 调用RAG服务
         ai_res_list = []
         with st.spinner("AI思考中..."):
             try:
+                # 使用用户特定的session_id
                 user_session_config = {
                     "configurable": {
                         "session_id": st.session_state.session_id
@@ -437,7 +497,10 @@ else:
                         cache_list.append(chunk)
                         yield chunk
 
+                # 流式显示回答
                 response = st.chat_message("assistant").write_stream(capture(res_stream, ai_res_list))
+
+                # 保存到历史
                 full_response = "".join(ai_res_list)
                 st.session_state["message"].append({"role": "assistant", "content": full_response})
 
