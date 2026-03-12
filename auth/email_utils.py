@@ -19,10 +19,6 @@ from typing import Dict
 import streamlit as st
 import socket
 
-# 存储验证码的临时字典（key:邮箱, value:{code:验证码, expires:过期时间}）
-if 'verification_codes' not in st.session_state:
-    st.session_state.verification_codes = {}
-
 
 class EmailVerification:
     def __init__(self, sender_email: str, sender_password: str, smtp_server: str = "smtp.qq.com", smtp_port: int = 465):
@@ -45,6 +41,12 @@ class EmailVerification:
         print(f"   - 端口: {smtp_port}")
         print(f"   - 密码已设置: {'是' if sender_password else '否'}")
 
+    def _init_verification_codes(self):
+        """初始化验证码存储（确保session_state中有verification_codes）"""
+        if 'verification_codes' not in st.session_state:
+            st.session_state.verification_codes = {}
+            print("📧 初始化验证码存储")
+
     def generate_code(self, length: int = 6) -> str:
         """生成6位数字验证码"""
         return ''.join(random.choices(string.digits, k=length))
@@ -58,6 +60,9 @@ class EmailVerification:
         try:
             print(f"📧 开始发送验证码到: {to_email}")
 
+            # 确保verification_codes已初始化
+            self._init_verification_codes()
+
             # 生成6位数字验证码
             code = self.generate_code()
             print(f"📧 生成验证码: {code}")
@@ -67,6 +72,7 @@ class EmailVerification:
                 'code': code,
                 'expires_at': time.time() + 300  # 300秒 = 5分钟
             }
+            print(f"📧 验证码已存储，当前存储数量: {len(st.session_state.verification_codes)}")
 
             # 创建邮件内容
             msg = MIMEMultipart()
@@ -138,6 +144,9 @@ class EmailVerification:
         :param code: 用户输入的验证码
         :return: 是否验证成功
         """
+        # 确保verification_codes已初始化
+        self._init_verification_codes()
+
         if email not in st.session_state.verification_codes:
             print(f"验证码验证失败: 邮箱 {email} 没有找到验证码记录")
             return False

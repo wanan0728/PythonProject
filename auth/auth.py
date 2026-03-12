@@ -68,12 +68,13 @@ class AuthManager:
         # 2. 加载现有用户
         users = self._load_users()
 
-        # 3. 检查邮箱是否已存在
-        for uid, user_data in users.items():
+        # 3. 先检查邮箱是否已被注册
+        for existing_username, user_data in users.items():
             if user_data.get('email') == email:
+                print(f"邮箱已被注册: {email} 已被用户 '{existing_username}' 使用")
                 return False, "该邮箱已被注册"
 
-        # 4. 检查用户名是否已存在
+        # 4. 再检查用户名是否已存在
         if username in users:
             return False, "用户名已存在"
 
