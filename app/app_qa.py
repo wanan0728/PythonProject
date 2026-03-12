@@ -126,6 +126,8 @@ if not st.session_state.logged_in:
                             st.warning("请先输入邮箱")
 
                 st.markdown("---")
+
+                # 注册表单提交部分
                 submit = st.form_submit_button("注册", use_container_width=True)
 
                 if submit:
@@ -143,52 +145,100 @@ if not st.session_state.logged_in:
                             password=password,
                             verification_code=verification_code
                         )
+
                         if success:
-                            st.success("注册成功！请登录")
-
-                            # ========== 数据验证 ==========
-                            with st.expander("📊 数据验证（查看注册结果）"):
-                                users_file = os.path.join(project_root, "auth", "users.json")
-                                st.write(f"用户文件路径: {users_file}")
-                                st.write(f"文件是否存在: {os.path.exists(users_file)}")
-
-                                if os.path.exists(users_file):
-                                    try:
-                                        with open(users_file, 'r', encoding='utf-8') as f:
-                                            current_users = json.load(f)
-                                        st.write(f"当前用户总数: {len(current_users)}")
-
-                                        # 显示所有用户
-                                        st.subheader("已注册用户列表")
-                                        for uname, uinfo in current_users.items():
-                                            with st.container():
-                                                col_u1, col_u2 = st.columns(2)
-                                                with col_u1:
-                                                    st.write(f"**用户名:** {uname}")
-                                                    st.write(f"**邮箱:** {uinfo.get('email', '无')}")
-                                                with col_u2:
-                                                    st.write(f"**会话ID:** {uinfo.get('session_id', '无')}")
-                                                    st.write(f"**注册时间:** {uinfo.get('created_at', '无')}")
-                                                st.divider()
-
-                                        # 检查刚注册的用户
-                                        if username in current_users:
-                                            st.success(f"✅ 用户 '{username}' 成功写入文件！")
-                                        else:
-                                            st.error(f"❌ 用户 '{username}' 未在文件中找到！")
-
-                                    except Exception as e:
-                                        st.error(f"读取文件失败: {e}")
-                                else:
-                                    st.error("users.json 文件不存在，请检查 auth 文件夹")
-
-                            time.sleep(3)
-                            st.rerun()
+                            # 使用 st.session_state 标记注册成功
+                            st.session_state['register_success'] = True
+                            st.session_state['register_username'] = username
+                            st.rerun()  # 立即刷新页面显示成功信息
                         else:
-                            st.error(message)
+                            st.session_state['register_error'] = message
+                            st.rerun()
 
-    # 未登录状态不显示主内容
-    st.stop()
+                # 在表单外部处理成功/失败显示（这样才能正常显示）
+                if st.session_state.get('register_success'):
+                    # 清空状态，防止重复显示
+                    username = st.session_state.get('register_username', '用户')
+                    st.session_state['register_success'] = False
+                    st.session_state['register_username'] = None
+
+                    # 显示成功弹窗
+                    st.balloons()
+                    st.toast("🎉 注册成功！", icon="🎉")
+
+                    # 成功消息容器
+                    with st.container():
+                        st.markdown("""
+                        <style>
+                        .success-box {
+                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                            color: white;
+                            padding: 30px;
+                            border-radius: 15px;
+                            text-align: center;
+                            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+                            margin: 20px 0;
+                        }
+                        </style>
+                        """, unsafe_allow_html=True)
+
+                        st.markdown(f"""
+                        <div class="success-box">
+                            <h2>✅ 注册成功！</h2>
+                            <p style="font-size: 18px;">欢迎 <strong>{username}</strong> 加入智能客服</p>
+                            <p style="font-size: 16px; opacity: 0.9;">⏰ 3秒后自动跳转到登录页...</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                        # 进度条倒计时
+                        progress_bar = st.progress(0)
+                        for i in range(100):
+                            time.sleep(0.03)  # 3秒完成
+                            progress_bar.progress(i + 1)
+
+                    # 切换到登录模式
+                    st.session_state['register_mode'] = False
+                    st.session_state['show_login'] = True
+                    time.sleep(0.5)
+                    st.rerun()
+
+                if st.session_state.get('register_error'):
+                    # 清空错误状态
+                    error_msg = st.session_state['register_error']
+                    st.session_state['register_error'] = None
+
+                    # 显示错误弹窗
+                    st.error(f"❌ 注册失败")
+
+                    with st.expander("📋 失败原因和建议", expanded=True):
+                        col_reason1, col_reason2 = st.columns(2)
+                        with col_reason1:
+                            st.markdown("**失败原因**")
+                            if "邮箱" in error_msg:
+                                st.warning("⚠️ 邮箱已被注册")
+                            elif "用户名" in error_msg:
+                                st.warning("⚠️ 用户名已存在")
+                            elif "验证码" in error_msg:
+                                st.warning("⚠️ 验证码错误或过期")
+                            else:
+                                st.warning(f"⚠️ {error_msg}")
+
+                        with col_reason2:
+                            st.markdown("**建议操作**")
+                            if "邮箱" in error_msg:
+                                st.info("💡 换一个邮箱重新注册")
+                            elif "用户名" in error_msg:
+                                st.info("💡 换一个用户名重新注册")
+                            elif "验证码" in error_msg:
+                                st.info("💡 重新获取验证码")
+                            else:
+                                st.info("💡 稍后重试或联系管理员")
+
+                    # 重试按钮
+                    col_retry1, col_retry2, col_retry3 = st.columns(3)
+                    with col_retry2:
+                        if st.button("🔄 重新填写", use_container_width=True):
+                            st.rerun()
 
 # ========== 已登录，根据角色显示不同界面 ==========
 
