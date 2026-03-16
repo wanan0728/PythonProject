@@ -5,3 +5,19 @@ langchain-chroma
 chromadb
 dashscope
 python-dotenv
+loguru>=0.7.2
+redis>=4.5.0
+flask-limiter>=3.0.0
+rank_bm25>=0.2.2
+sentence-transformers>=2.2.0
+nltk>=3.8.0
+
+# 多模态 RAG
+langchain-pymupdf4llm>=0.5.0
+pymupdf4llm>=0.1.0
+python-docx>=1.1.0
+pillow>=10.0.0
+pytesseract>=0.3.10
+pdf2image>=1.16.0
+transformers>=4.35.0
+torch>=2.0.0

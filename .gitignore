@@ -17,3 +17,8 @@ auth/users.json
 
 # Streamlit
 .streamlit/secrets.toml
+
+# 日志文件
+logs/
+*.log
+*.log.zip
